@@ -49,29 +49,6 @@ INSERT INTO movies VALUES
 (11,'City of Paper',11,2018,'Drame',7.6,122);
 """
 
-EXOS = [
-"1) Lister tous les titres de livres et leurs années.",
-"2) Films dont le genre est 'Sci-Fi'.",
-"3) Livres avec une note >= 4.5.",
-"4) Films sortis entre 2015 et 2021.",
-"5) Livres entre 250 et 400 pages et note > 4.0.",
-"6) Top 5 films par note.",
-"7) Livres 'Drame' ou 'Romance'.",
-"8) Films Mystère ou Thriller avec note >= 7.",
-"9) Livres avant 2010.",
-"10) Films entre 100 et 130 minutes.",
-"11) 3 livres les plus récents.",
-"12) Livres note < 4.0 OU pages < 250.",
-"13) Films année 2019 ou 2020.",
-"14) Livres auteurs 1,3,5 note >= 4.0.",
-"15) Tous les films triés par genre/note.",
-"16) Livres avec auteur et pays.",
-"17) Films + nom du réalisateur (LEFT JOIN).",
-"18) Nombre de livres par auteur.",
-"19) Moyenne de notes par réalisateur.",
-"20) Par pays, nombre d’auteurs et réalisateurs (FULL JOIN simulé)."
-]
-
 SOL = {
 1:"SELECT title, year FROM books;",
 2:"SELECT title, year FROM movies WHERE genre='Sci-Fi';",
@@ -101,36 +78,36 @@ SOL = {
 
 @st.cache_resource
 def get_conn():
-    c = sqlite3.connect(":memory:", check_same_thread=False)
+    c=sqlite3.connect(":memory:",check_same_thread=False)
     c.execute("PRAGMA foreign_keys=ON;")
     return c
 
-def reset_db(c, s):
-    with closing(c.cursor()) as cur: cur.executescript(s)
+def reset_db(c,s):
+    with closing(c.cursor()) as cur:cur.executescript(s)
     c.commit()
 
-def run_sql(c, q):
+def run_sql(c,q):
     with closing(c.cursor()) as cur:
         cur.execute(q)
-        if re.match(r"\s*(WITH|SELECT|PRAGMA)\b", q.strip(), re.I):
-            cols = [d[0] for d in cur.description] if cur.description else []
-            rows = cur.fetchall()
-            return pd.DataFrame(rows, columns=cols), None
-        c.commit(); return None, "OK"
+        if re.match(r"\s*(WITH|SELECT|PRAGMA)\b",q.strip(),re.I):
+            cols=[d[0] for d in cur.description] if cur.description else []
+            rows=cur.fetchall()
+            return pd.DataFrame(rows,columns=cols),None
+        c.commit();return None,"OK"
 
 def render_bar():
-    cols = st.columns(len(EXOS))
-    for i, col in enumerate(cols):
-        c = "#ccc"
-        s = st.session_state.status[i]
-        if s=="solved": c="#2ecc71"
-        elif s=="skipped": c="#e67e22"
+    cols=st.columns(len(SOL))
+    for i,col in enumerate(cols):
+        c="#ccc"
+        s=st.session_state.status[i]
+        if s=="solved":c="#2ecc71"
+        elif s=="skipped":c="#e67e22"
         with col:
             if st.button(str(i+1),key=f"bar_{i}_{st.session_state.render_id}",width="stretch"):
                 st.session_state.step=i
 
 def save_progress_image(n):
-    w,h=400,40;sw=w//len(EXOS)
+    w,h=400,40;sw=w//len(SOL)
     img=Image.new("RGB",(w,h),"white");dr=ImageDraw.Draw(img)
     for i,s in enumerate(st.session_state.status):
         c="#ccc"
@@ -152,8 +129,8 @@ def upload_git(f,repo,tk,msg=None,branch="main"):
     return r.status_code
 
 if "status" not in st.session_state:
-    st.session_state.status=["locked"]*len(EXOS)
-    st.session_state.inputs=[""]*len(EXOS)
+    st.session_state.status=["locked"]*len(SOL)
+    st.session_state.inputs=[""]*len(SOL)
     st.session_state.step=0
     st.session_state.render_id=0
 
@@ -161,15 +138,18 @@ conn=get_conn();reset_db(conn,DEFAULT_SQL)
 st.title("Pratique SQL — Livres & Films")
 render_bar()
 i=st.session_state.step
-st.subheader(EXOS[i])
+st.subheader(list(SOL.keys())[i])
+st.markdown(list(SOL.values())[i])
+
 user=st.text_area("Votre requête SQL :",st.session_state.inputs[i],height=150,key=f"input_{i}")
 c1,c2,c3=st.columns(3)
 with c1:run=st.button("Exécuter",key=f"run_{i}")
-with c2:hint=st.button("Indice",key=f"hint_{i}")
-with c3:skip=st.button("Je bloque — voir la solution",key=f"skip_{i}")
+with c2:skip=st.button("Je bloque — voir la solution",key=f"skip_{i}")
+with c3:reset=st.button("Réinitialiser la base",key=f"reset_{i}")
 
-if hint:
-    st.info("Indice : utilisez SELECT ... FROM ... (voir le type de jointure demandé).")
+if reset:
+    reset_db(conn,DEFAULT_SQL)
+    st.success("Base réinitialisée.")
 
 if skip:
     st.session_state.status[i]="skipped"
@@ -185,14 +165,16 @@ if run:
         st.session_state.inputs[i]=user
         try:
             df,msg=run_sql(conn,user)
-            if df is not None:
-                st.dataframe(df, use_container_width=True)
+            if df is not None and not df.empty:
+                st.dataframe(df,use_container_width=True)
                 st.session_state.status[i]="solved"
-                if i<len(EXOS)-1:st.session_state.step=i+1
+                if i<len(SOL)-1:st.session_state.step=i+1
                 st.session_state.render_id+=1
                 st.rerun()
+            elif msg:
+                st.success(msg)
             else:
-                st.success(msg or "OK")
+                st.error("Résultat vide ou incorrect.")
         except Exception as e:
             st.error(f"Erreur SQL : {e}")
 
@@ -202,11 +184,14 @@ name=st.text_input("Nom complet :")
 if st.button("Envoyer à l’enseignant"):
     if name.strip():
         img=save_progress_image(name.replace(" ","_"))
-        df=pd.DataFrame({"Exercice":EXOS,"Réponse":st.session_state.inputs,"Statut":st.session_state.status})
+        df=pd.DataFrame({"Exercice":list(SOL.keys()),"Réponse":st.session_state.inputs,"Statut":st.session_state.status})
         f=f"{name.replace(' ','_')}_answers.csv";df.to_csv(f,index=False)
-        token=st.secrets[TOKEN_SECRET_KEY]
-        upload_git(img,REPO,token,f"Progress {name}")
-        upload_git(f,REPO,token,f"Answers {name}")
-        st.success("Fichiers envoyés dans GitHub /submissions.")
+        if TOKEN_SECRET_KEY not in st.secrets:
+            st.error("Le secret GITHUB_TOKEN est introuvable.")
+        else:
+            token=st.secrets[TOKEN_SECRET_KEY]
+            upload_git(img,REPO,token,f"Progress {name}")
+            upload_git(f,REPO,token,f"Answers {name}")
+            st.success("Fichiers envoyés dans GitHub /submissions.")
     else:
         st.error("Nom manquant.")

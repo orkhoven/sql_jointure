@@ -24,9 +24,94 @@ CREATE TABLE authors (
   country TEXT,
   birth_year INTEGER
 );
-...
+
+-- Livres
+CREATE TABLE books (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  author_id INTEGER,
+  year INTEGER,
+  genre TEXT,
+  rating NUMERIC,
+  pages INTEGER,
+  FOREIGN KEY (author_id) REFERENCES authors(id)
+);
+
+-- Réalisateurs
+CREATE TABLE directors (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  country TEXT,
+  birth_year INTEGER
+);
+
+-- Films
+CREATE TABLE movies (
+  id INTEGER PRIMARY KEY,
+  title TEXT NOT NULL,
+  director_id INTEGER,
+  year INTEGER,
+  genre TEXT,
+  rating NUMERIC,
+  duration_minutes INTEGER,
+  FOREIGN KEY (director_id) REFERENCES directors(id)
+);
+
+-- Données : auteurs
+INSERT INTO authors (id, name, country, birth_year) VALUES
+(1,'Ava Martin','USA',1975),
+(2,'Luca Moretti','Italy',1969),
+(3,'Priya Sharma','India',1982),
+(4,'Hiro Tanaka','Japan',1970),
+(5,'Sofia Garcia','Spain',1988),
+(6,'Thomas Müller','Germany',1965),
+(7,'Emily O''Connor','Ireland',1990),
+(8,'Ahmed El-Sayed','Egypt',1978),
+(9,'Claire Dupont','France',1980),
+(10,'Jacob Svensson','Sweden',1973),
+(11,'Maya Patel','UK',1992);
+
+-- Données : livres
+INSERT INTO books (id, title, author_id, year, genre, rating, pages) VALUES
+(1,'Stars Over Cairo',8,2015,'Drame',4.3,320),
+(2,'The Last Algorithm',2,2020,'Sci-Fi',4.7,412),
+(3,'Whispers in Winter',9,2012,'Romance',3.9,256),
+(4,'Gardens of Kyoto',4,2018,'Mystère',4.1,288),
+(5,'Midnight Circus',6,2005,'Fantaisie',4.0,360),
+(6,'Echoes of Tomorrow',3,2021,'Sci-Fi',4.8,488),
+(7,'The Quiet Harbor',1,2010,'Drame',3.7,220),
+(8,'A Walk Through Lisbon',5,2016,'Romance',4.2,304),
+(9,'Code of Silence',10,2008,'Thriller',4.5,340),
+(10,'The Paper Garden',7,2019,'Mystère',3.8,272),
+(11,'Notes from the Train',11,2022,'Drame',4.6,198);
+
+-- Données : réalisateurs
+INSERT INTO directors (id, name, country, birth_year) VALUES
+(1,'Martin Ruiz','Mexico',1968),
+(2,'Claire Legrand','France',1976),
+(3,'Kenji Sato','Japan',1981),
+(4,'Olivia Bennett','UK',1980),
+(5,'Diego Fernandez','Spain',1972),
+(6,'Anna Kowalska','Poland',1974),
+(7,'Marcus Brown','USA',1965),
+(8,'Li Wei','China',1979),
+(9,'Nina Rossi','Italy',1984),
+(10,'Sven Larsson','Sweden',1970),
+(11,'Rana Habib','Lebanon',1986);
+
 -- Données : films
-INSERT INTO movies (...) VALUES (...);
+INSERT INTO movies (id, title, director_id, year, genre, rating, duration_minutes) VALUES
+(1,'Nightfall in Rome',9,2011,'Drame',7.2,112),
+(2,'Quantum Blossom',3,2020,'Sci-Fi',8.6,135),
+(3,'The Lovers'' Map',2,2016,'Romance',6.9,101),
+(4,'Hidden Library',4,2019,'Mystère',7.8,124),
+(5,'Paper Clouds',5,2007,'Fantaisie',7.0,128),
+(6,'Silent Protocol',7,2009,'Thriller',8.1,140),
+(7,'Harbor Lights',1,2013,'Drame',6.5,96),
+(8,'Tomorrow''s Song',8,2021,'Sci-Fi',9.0,148),
+(9,'Lisbon Afternoon',5,2015,'Romance',7.4,103),
+(10,'Midnight Train',10,2003,'Mystère',6.8,115),
+(11,'City of Paper',11,2018,'Drame',7.6,122);
 """
 
 # === EXERCICES ===
@@ -68,7 +153,7 @@ PRESETS = {
          "LEFT JOIN d ON d.country=all_c.country ORDER BY all_c.country;")
 }
 
-# === OUTILS DE BASE DE DONNÉES ===
+# === OUTILS BD ===
 @st.cache_resource
 def get_conn():
     conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -91,7 +176,7 @@ def run_sql(conn, sql):
         conn.commit()
         return None, "OK"
 
-# === PROGRESSION VISUELLE ===
+# === PROGRESSION ===
 def render_progress_bar():
     html = '<div style="display:flex;gap:4px;margin:10px 0;">'
     for s in st.session_state.status:
@@ -145,7 +230,6 @@ reset_db(conn, DEFAULT_SQL)
 
 # === INTERFACE ===
 st.title("Pratique SQL — Livres & Films (avec progression)")
-
 render_progress_bar()
 
 exo_index = st.session_state.step
@@ -160,12 +244,12 @@ user_query = st.text_area(
     placeholder="-- Écrivez votre requête ici"
 )
 
-col1, col2, col3 = st.columns([1,1,1])
-with col1:
+c1, c2, c3 = st.columns([1,1,1])
+with c1:
     run = st.button("Exécuter la requête")
-with col2:
+with c2:
     skip = st.button("Je bloque — voir la solution")
-with col3:
+with c3:
     reset = st.button("Réinitialiser la base")
 
 if reset:
@@ -198,7 +282,7 @@ if run:
     except Exception as e:
         st.error(f"Erreur : {e}")
 
-# === SOUMISSION FINALE ===
+# === SOUMISSION ===
 if all(s in ["solved", "skipped"] for s in st.session_state.status):
     st.markdown("---")
     st.subheader("Soumission de votre progression")
@@ -214,7 +298,7 @@ if all(s in ["solved", "skipped"] for s in st.session_state.status):
             csv_file = f"{name.strip().replace(' ', '_')}_answers.csv"
             df.to_csv(csv_file, index=False)
             token = st.secrets["GITHUB_TOKEN"]
-            repo = "orkhoven/sql_panda"  # adjust to your repo
+            repo = "orkhoven/sql_panda"
             upload_to_github(img_file, repo, token, f"Progress for {name}")
             upload_to_github(csv_file, repo, token, f"Answers for {name}")
         else:

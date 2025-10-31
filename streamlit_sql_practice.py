@@ -1,4 +1,4 @@
-# streamlit_sql_practice_fixed_questions.py
+# streamlit_sql_practice_final.py
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -8,7 +8,7 @@ from contextlib import closing
 
 st.set_page_config(page_title="Pratique SQL : Livres & Films", layout="wide")
 
-REPO = "orkhoven/sql_jointure"
+REPO = "orkhoven/sql_panda"
 BRANCH = "main"
 SUBDIR = "submissions"
 TOKEN_SECRET_KEY = "GITHUB_TOKEN"
@@ -51,41 +51,56 @@ INSERT INTO movies VALUES
 """
 
 # ---------- QUESTIONS ----------
-QUESTIONS = {
-1:"Listez tous les titres de livres avec leur année de publication (triés par année croissante).",
-2:"Affichez les films dont le genre est 'Sci-Fi' (titre, année).",
-3:"Affichez les livres dont la note est supérieure ou égale à 4.5 (titre, auteur_id, note).",
-4:"Affichez les films sortis entre 2015 et 2021 (titre, année, réalisateur_id).",
-5:"Affichez les livres avec entre 250 et 400 pages et une note > 4.0 (titre, pages, note).",
-6:"Affichez les 5 films les mieux notés (titre, note).",
-7:"Affichez les livres dont le genre est 'Drame' ou 'Romance' (titre, genre, année).",
-8:"Affichez les films de genre 'Mystère' ou 'Thriller' avec note >= 7.0.",
-9:"Affichez les livres publiés avant 2010 (titre, année).",
-10:"Affichez les films dont la durée est comprise entre 100 et 130 minutes.",
-11:"Affichez les 3 livres les plus récents.",
-12:"Affichez les livres avec une note < 4.0 ou moins de 250 pages.",
-13:"Affichez les films sortis en 2019 ou 2020 (titre, année, note).",
-14:"Affichez les livres écrits par les auteurs (id 1,3,5) et ayant une note >= 4.0.",
-15:"Affichez tous les films triés par genre puis par note décroissante.",
-16:"Listez tous les titres de livres avec le nom et le pays de leur auteur.",
-17:"Affichez tous les films avec le nom de leur réalisateur, même si aucun réalisateur n’est trouvé.",
-18:"Pour chaque auteur, affichez le nombre de livres écrits (inclure ceux sans livre).",
-19:"Pour chaque réalisateur, affichez la note moyenne de ses films (uniquement si au moins un film existe).",
-20:"Par pays, affichez le nombre d’auteurs et de réalisateurs (jointure complète simulée)."
-}
+QUESTIONS = [
+"Listez tous les titres de livres avec leur année de publication (triés par année croissante).",
+"Affichez les films dont le genre est 'Sci-Fi' (titre, année).",
+"Affichez les livres dont la note est ≥ 4.5 (titre, auteur_id, note).",
+"Affichez les films sortis entre 2015 et 2021 (titre, année, réalisateur_id).",
+"Affichez les livres ayant entre 250 et 400 pages et une note > 4.0.",
+"Affichez les 5 films les mieux notés.",
+"Affichez les livres de genre 'Drame' ou 'Romance'.",
+"Affichez les films de genre 'Mystère' ou 'Thriller' avec note ≥ 7.0.",
+"Affichez les livres publiés avant 2010.",
+"Affichez les films dont la durée est entre 100 et 130 minutes.",
+"Affichez les 3 livres les plus récents.",
+"Affichez les livres avec une note < 4.0 ou moins de 250 pages.",
+"Affichez les films sortis en 2019 ou 2020.",
+"Affichez les livres écrits par les auteurs (id 1,3,5) avec note ≥ 4.0.",
+"Affichez tous les films triés par genre puis par note décroissante.",
+"Listez tous les livres avec le nom et le pays de leur auteur.",
+"Affichez tous les films et le nom de leur réalisateur (même si manquant).",
+"Pour chaque auteur, affichez le nombre de livres écrits (y compris 0).",
+"Pour chaque réalisateur, affichez la note moyenne de ses films.",
+"Par pays, affichez le nombre d’auteurs et de réalisateurs."
+]
 
 # ---------- SOLUTIONS ----------
-SOL = {
-16:"SELECT b.title,a.name,a.country FROM books b JOIN authors a ON a.id=b.author_id;",
-17:"SELECT m.title,d.name FROM movies m LEFT JOIN directors d ON d.id=m.director_id;",
-18:"SELECT a.name,COUNT(b.id) AS total FROM authors a LEFT JOIN books b ON b.author_id=a.id GROUP BY a.name;",
-19:"SELECT d.name,AVG(m.rating) AS moyenne FROM directors d JOIN movies m ON m.director_id=d.id GROUP BY d.name;",
-20:("WITH a AS (SELECT country,COUNT(*) AS total_auteurs FROM authors GROUP BY country), "
+SOL = [
+"SELECT title, year FROM books ORDER BY year ASC;",
+"SELECT title, year FROM movies WHERE genre='Sci-Fi';",
+"SELECT title, author_id, rating FROM books WHERE rating>=4.5 ORDER BY rating DESC;",
+"SELECT title, year, director_id FROM movies WHERE year BETWEEN 2015 AND 2021;",
+"SELECT title, pages, rating FROM books WHERE pages BETWEEN 250 AND 400 AND rating>4.0;",
+"SELECT title, rating FROM movies ORDER BY rating DESC LIMIT 5;",
+"SELECT title, genre, year FROM books WHERE genre IN('Drame','Romance');",
+"SELECT title, genre, rating FROM movies WHERE genre IN('Mystère','Thriller') AND rating>=7.0;",
+"SELECT title, year FROM books WHERE year<2010 ORDER BY year DESC;",
+"SELECT title, duration_minutes, genre FROM movies WHERE duration_minutes BETWEEN 100 AND 130;",
+"SELECT title, year FROM books ORDER BY year DESC LIMIT 3;",
+"SELECT title, rating, pages FROM books WHERE rating<4.0 OR pages<250;",
+"SELECT title, year, rating FROM movies WHERE year IN(2019,2020);",
+"SELECT title FROM books WHERE author_id IN(1,3,5) AND rating>=4.0;",
+"SELECT * FROM movies ORDER BY genre ASC, rating DESC;",
+"SELECT b.title,a.name,a.country FROM books b JOIN authors a ON a.id=b.author_id;",
+"SELECT m.title,d.name FROM movies m LEFT JOIN directors d ON d.id=m.director_id;",
+"SELECT a.name,COUNT(b.id) AS total FROM authors a LEFT JOIN books b ON b.author_id=a.id GROUP BY a.name;",
+"SELECT d.name,AVG(m.rating) AS moyenne FROM directors d JOIN movies m ON m.director_id=d.id GROUP BY d.name;",
+"WITH a AS (SELECT country,COUNT(*) AS total_auteurs FROM authors GROUP BY country), "
 "d AS (SELECT country,COUNT(*) AS total_realisateurs FROM directors GROUP BY country), "
 "all_c AS (SELECT country FROM a UNION SELECT country FROM d) "
 "SELECT all_c.country,COALESCE(a.total_auteurs,0) AS total_auteurs,COALESCE(d.total_realisateurs,0) AS total_realisateurs "
-"FROM all_c LEFT JOIN a ON a.country=all_c.country LEFT JOIN d ON d.country=all_c.country;")
-}
+"FROM all_c LEFT JOIN a ON a.country=all_c.country LEFT JOIN d ON d.country=all_c.country;"
+]
 
 # ---------- HELPERS ----------
 @st.cache_resource
@@ -105,7 +120,8 @@ def run_sql(c, q):
             cols=[d[0] for d in cur.description] if cur.description else []
             rows=cur.fetchall()
             return pd.DataFrame(rows,columns=cols),None
-        c.commit();return None,"OK"
+        c.commit()
+        return None,"OK"
 
 def render_bar():
     cols = st.columns(len(QUESTIONS))
@@ -114,10 +130,7 @@ def render_bar():
         if st.session_state.status[i] == "solved": color = "#2ecc71"
         elif st.session_state.status[i] == "skipped": color = "#e67e22"
         with col:
-            st.markdown(
-                f"<div style='background:{color};border-radius:4px;text-align:center;padding:4px;color:white;font-weight:bold'>{i+1}</div>",
-                unsafe_allow_html=True
-            )
+            st.markdown(f"<div style='background:{color};text-align:center;padding:3px;color:white;font-weight:bold'>{i+1}</div>",unsafe_allow_html=True)
 
 def upload_git(f,repo,token,msg):
     fn=os.path.basename(f)
@@ -144,23 +157,23 @@ render_bar()
 
 i=st.session_state.step
 st.subheader(f"Exercice {i+1}")
-st.write(QUESTIONS[i+1])
+st.write(QUESTIONS[i])
 
 user=st.text_area("Votre requête SQL :", st.session_state.inputs[i], height=150)
 
-c1,c2,c3=st.columns(3)
-run=c1.button("Exécuter")
-see_sol=c2.button("Voir la solution")
-reset=c3.button("Réinitialiser la base")
+col1,col2,col3=st.columns(3)
+run=col1.button("Exécuter")
+see_sol=col2.button("Voir la solution")
+reset=col3.button("Réinitialiser la base")
 
 if reset:
     reset_db(conn,DEFAULT_SQL)
     st.success("Base réinitialisée.")
 
 if see_sol:
-    st.session_state.status[i]="skipped"
-    sol_text = SOL.get(i+1, "-- Pas de solution enregistrée.")
-    st.session_state.inputs[i]=sol_text
+    sol_text = SOL[i]
+    st.session_state.inputs[i] = sol_text
+    st.session_state.status[i] = "skipped"
     st.text_area("Solution officielle :", sol_text, height=100)
     st.info("La solution a été copiée dans la zone d’édition.")
 
@@ -172,11 +185,17 @@ if run:
         st.session_state.inputs[i]=q
         try:
             df,msg=run_sql(conn,q)
-            if df is not None and not df.empty:
-                st.dataframe(df,use_container_width=True)
-                st.session_state.status[i]="solved"
-            elif msg: st.success(msg)
-            else: st.warning("Résultat vide.")
+            if df is not None:
+                if df.empty:
+                    st.warning("Résultat vide.")
+                else:
+                    st.dataframe(df,use_container_width=True)
+                    st.session_state.status[i]="solved"
+            else:
+                if msg=="OK":
+                    st.warning("Aucune donnée retournée (requête non-SELECT).")
+                else:
+                    st.success(msg)
         except Exception as e:
             st.error(f"Erreur SQL : {e}")
 
@@ -188,8 +207,14 @@ if st.button("Envoyer à l’enseignant"):
     if not name.strip():
         st.error("Nom manquant.")
     else:
-        df=pd.DataFrame({"Exercice":list(QUESTIONS.keys()),"Réponse":st.session_state.inputs,"Statut":st.session_state.status})
-        csv=f"{name.replace(' ','_')}_answers.csv";df.to_csv(csv,index=False)
+        df=pd.DataFrame({
+            "Exercice":list(range(1,len(QUESTIONS)+1)),
+            "Question":QUESTIONS,
+            "Réponse":st.session_state.inputs,
+            "Statut":st.session_state.status
+        })
+        csv=f"{name.replace(' ','_')}_answers.csv"
+        df.to_csv(csv,index=False)
         if TOKEN_SECRET_KEY not in st.secrets:
             st.error("Secret GITHUB_TOKEN introuvable.")
         else:

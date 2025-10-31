@@ -7,7 +7,7 @@ from contextlib import closing
 
 st.set_page_config(page_title="Pratique SQL : Livres & Films", layout="wide")
 
-# === BASE DE DONNÉES PAR DÉFAUT ===
+# ---------- Données ----------
 DEFAULT_SQL = r"""
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS books;
@@ -49,7 +49,7 @@ INSERT INTO movies VALUES
 (11,'City of Paper',11,2018,'Drame',7.6,122);
 """
 
-EXERCICES = [
+EXOS = [
     "1) Lister tous les titres de livres et leurs années.",
     "2) Films dont le genre est 'Sci-Fi'.",
     "3) Livres avec une note >= 4.5.",
@@ -72,7 +72,8 @@ EXERCICES = [
     "20) Par pays, nombre d’auteurs et réalisateurs (FULL JOIN simulé)."
 ]
 
-PRESETS = {
+# ---------- Solutions ----------
+SOL = {
     1:"SELECT title,year FROM books;",
     2:"SELECT title,year FROM movies WHERE genre='Sci-Fi';",
     3:"SELECT title,author_id,rating FROM books WHERE rating>=4.5;",
@@ -95,107 +96,128 @@ PRESETS = {
     20:("WITH a AS (SELECT country,COUNT(*) AS total_auteurs FROM authors GROUP BY country),"
         "d AS (SELECT country,COUNT(*) AS total_realisateurs FROM directors GROUP BY country),"
         "all_c AS (SELECT country FROM a UNION SELECT country FROM d)"
-        "SELECT all_c.country,COALESCE(a.total_auteurs,0),COALESCE(d.total_realisateurs,0)"
+        "SELECT all_c.country,COALESCE(a.total_auteurs,0) AS total_auteurs,COALESCE(d.total_realisateurs,0) AS total_realisateurs "
         "FROM all_c LEFT JOIN a ON a.country=all_c.country LEFT JOIN d ON d.country=all_c.country;")
 }
 
+# ---------- Fonctions SQL ----------
 @st.cache_resource
 def get_conn():
-    c=sqlite3.connect(":memory:",check_same_thread=False)
+    c = sqlite3.connect(":memory:", check_same_thread=False)
     c.execute("PRAGMA foreign_keys=ON;")
     return c
 
-def reset_db(c,s): 
+def reset_db(c, s):
     with closing(c.cursor()) as cur: cur.executescript(s)
     c.commit()
 
-def run_sql(c,q):
+def run_sql(c, q):
     with closing(c.cursor()) as cur:
         cur.execute(q)
-        if re.match(r"\s*(WITH\b|SELECT\b|PRAGMA\b)",q.strip(),flags=re.I):
-            cols=[d[0] for d in cur.description] if cur.description else []
-            rows=cur.fetchall()
-            return pd.DataFrame(rows,columns=cols),None
-        c.commit();return None,"OK"
+        if re.match(r"\s*(WITH|SELECT|PRAGMA)\b", q.strip(), re.I):
+            cols = [d[0] for d in cur.description] if cur.description else []
+            rows = cur.fetchall()
+            return pd.DataFrame(rows, columns=cols), None
+        c.commit(); return None, "OK"
 
+# ---------- Barre de progression ----------
 def render_bar():
-    cols=st.columns(len(EXERCICES))
-    for i,col in enumerate(cols):
-        color="#ccc"
-        if st.session_state.status[i]=="solved": color="#2ecc71"
-        elif st.session_state.status[i]=="skipped": color="#e67e22"
+    cols = st.columns(len(EXOS))
+    for i, col in enumerate(cols):
+        color = "#ccc"
+        if st.session_state.status[i] == "solved": color = "#2ecc71"
+        elif st.session_state.status[i] == "skipped": color = "#e67e22"
         with col:
-            if st.button(str(i+1),key=f"bar_{i}",use_container_width=True):
-                st.session_state.step=i
-            st.markdown(f"<div style='height:10px;background:{color};border-radius:2px;'></div>",unsafe_allow_html=True)
+            if st.button(str(i+1), key=f"bar_{i}_{st.session_state.render_id}", width="stretch"):
+                st.session_state.step = i
 
 def save_progress_image(n):
-    w,h=400,40;sw=w//len(EXERCICES)
-    img=Image.new("RGB",(w,h),"white");dr=ImageDraw.Draw(img)
-    for i,s in enumerate(st.session_state.status):
-        c="#ccc"
-        if s=="solved": c="#2ecc71"
-        elif s=="skipped": c="#e67e22"
-        dr.rectangle([i*sw,0,(i+1)*sw-2,h],fill=c,outline="black")
-    f=f"{n}_progress.png";img.save(f);return f
+    w, h = 400, 40
+    sw = w // len(EXOS)
+    img = Image.new("RGB", (w, h), "white")
+    dr = ImageDraw.Draw(img)
+    for i, s in enumerate(st.session_state.status):
+        c = "#ccc"
+        if s == "solved": c = "#2ecc71"
+        elif s == "skipped": c = "#e67e22"
+        dr.rectangle([i * sw, 0, (i + 1) * sw - 2, h], fill=c, outline="black")
+    f = f"{n}_progress.png"; img.save(f); return f
 
-def upload_git(f,repo,tk,msg=None):
-    fn=f.split("/")[-1];u=f"https://api.github.com/repos/{repo}/contents/submissions/{fn}"
-    with open(f,"rb") as x: c=base64.b64encode(x.read()).decode("utf-8")
-    h={"Authorization":f"token {tk}"};d={"message":msg or f"Add {fn}","content":c}
-    r=requests.put(u,headers=h,json=d)
-    return r.status_code
+def upload_git(f, repo, tk, msg=None, branch="main"):
+    import json
+    fn = f.split("/")[-1]
+    url = f"https://api.github.com/repos/{repo}/contents/submissions/{fn}"
+    with open(f, "rb") as x: content = base64.b64encode(x.read()).decode("utf-8")
+    headers = {"Authorization": f"token {tk}"}
+    r_get = requests.get(url, headers=headers)
+    sha = r_get.json().get("sha") if r_get.status_code == 200 else None
+    data = {"message": msg or f"Add {fn}", "content": content, "branch": branch}
+    if sha: data["sha"] = sha
+    r_put = requests.put(url, headers=headers, data=json.dumps(data))
+    if r_put.status_code not in [200, 201]:
+        st.error(f"Erreur GitHub ({r_put.status_code}): {r_put.text}")
+    return r_put.status_code
 
+# ---------- État ----------
 if "status" not in st.session_state:
-    st.session_state.status=["locked"]*len(EXERCICES)
-    st.session_state.step=0
-    st.session_state.inputs=[""]*len(EXERCICES)
+    st.session_state.status = ["locked"] * len(EXOS)
+    st.session_state.inputs = [""] * len(EXOS)
+    st.session_state.step = 0
+    st.session_state.render_id = 0
 
-conn=get_conn();reset_db(conn,DEFAULT_SQL)
+conn = get_conn(); reset_db(conn, DEFAULT_SQL)
 
+# ---------- Interface ----------
 st.title("Pratique SQL — Livres & Films")
 render_bar()
 
-i=st.session_state.step
-st.subheader(EXERCICES[i])
-user=st.text_area("Votre requête SQL :",st.session_state.inputs[i],height=150)
+i = st.session_state.step
+st.subheader(EXOS[i])
+user = st.text_area("Votre requête SQL :", st.session_state.inputs[i], height=150, key=f"input_{i}")
 
-c1,c2,c3=st.columns(3)
-with c1: run=st.button("Exécuter")
-with c2: skip=st.button("Je bloque — voir la solution")
-with c3: reset=st.button("Réinitialiser la base")
+c1, c2, c3 = st.columns(3)
+with c1: run = st.button("Exécuter", key=f"run_{i}")
+with c2: skip = st.button("Je bloque — voir la solution", key=f"skip_{i}")
+with c3: reset = st.button("Réinitialiser la base", key=f"reset_{i}")
 
 if reset:
-    reset_db(conn,DEFAULT_SQL)
+    reset_db(conn, DEFAULT_SQL)
     st.success("Base réinitialisée.")
 
 if skip:
-    st.session_state.status[i]="skipped"
-    st.code(PRESETS.get(i+1,"-- Aucune solution"),language="sql")
-    st.session_state.inputs[i]=PRESETS.get(i+1,"")
-    render_bar()
+    st.session_state.status[i] = "skipped"
+    st.code(SOL.get(i+1, "-- Pas de solution"), language="sql")
+    st.session_state.inputs[i] = SOL.get(i+1, "")
+    st.session_state.render_id += 1
+    st.rerun()
 
 if run:
-    st.session_state.inputs[i]=user
+    st.session_state.inputs[i] = user
     try:
-        df,msg=run_sql(conn,user)
-        if df is not None: 
-            st.dataframe(df,use_container_width=True)
-            st.session_state.status[i]="solved"
-            render_bar()
-        else: st.write(msg or "OK")
-    except Exception as e: st.error(e)
+        df, msg = run_sql(conn, user)
+        if df is not None:
+            st.dataframe(df, use_container_width=True)
+            st.session_state.status[i] = "solved"
+            if i < len(EXOS)-1:
+                st.session_state.step = i + 1
+            st.session_state.render_id += 1
+            st.rerun()
+        else:
+            st.success(msg or "OK")
+    except Exception as e:
+        st.error(e)
 
 st.markdown("---")
 st.subheader("Soumission de votre progression")
-name=st.text_input("Nom complet :")
-if st.button("Envoyer à l’enseignant"):
+name = st.text_input("Nom complet :")
+if st.button("Envoyer à l’enseignant", key="submit_all"):
     if name.strip():
-        img=save_progress_image(name.replace(" ","_"))
-        df=pd.DataFrame({"Exercice":EXERCICES,"Réponse":st.session_state.inputs,"Statut":st.session_state.status})
-        f=f"{name.replace(' ','_')}_answers.csv";df.to_csv(f,index=False)
-        tk=st.secrets["GITHUB_TOKEN"];repo="orkhoven/sql_panda"
-        upload_git(img,repo,tk,f"Progress {name}")
-        upload_git(f,repo,tk,f"Answers {name}")
+        img = save_progress_image(name.replace(" ", "_"))
+        df = pd.DataFrame({"Exercice": EXOS, "Réponse": st.session_state.inputs, "Statut": st.session_state.status})
+        f = f"{name.replace(' ','_')}_answers.csv"; df.to_csv(f, index=False)
+        tk = st.secrets["GITHUB_TOKEN"]; repo = "orkhoven/sql_panda"
+        upload_git(img, repo, tk, f"Progress {name}")
+        upload_git(f, repo, tk, f"Answers {name}")
         st.success("Envoyé avec succès.")
-    else: st.error("Nom manquant.")
+    else:
+        st.error("Nom manquant.")

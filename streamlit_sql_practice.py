@@ -2,17 +2,19 @@
 import streamlit as st
 import sqlite3
 import pandas as pd
-import re, base64, requests, json
+import re, base64, requests, json, os
 from PIL import Image, ImageDraw
 from contextlib import closing
 
 st.set_page_config(page_title="Pratique SQL : Livres & Films", layout="wide")
 
+# --- GitHub configuration ---
 REPO = "orkhoven/sql_panda"
 BRANCH = "main"
 SUBDIR = "submissions"
 TOKEN_SECRET_KEY = "GITHUB_TOKEN"
 
+# --- Database setup ---
 DEFAULT_SQL = r"""
 PRAGMA foreign_keys = OFF;
 DROP TABLE IF EXISTS books;
@@ -49,149 +51,179 @@ INSERT INTO movies VALUES
 (11,'City of Paper',11,2018,'Drame',7.6,122);
 """
 
+# --- Exercise set ---
 SOL = {
-1:"SELECT title, year FROM books;",
-2:"SELECT title, year FROM movies WHERE genre='Sci-Fi';",
-3:"SELECT title, author_id, rating FROM books WHERE rating>=4.5;",
-4:"SELECT title, year FROM movies WHERE year BETWEEN 2015 AND 2021;",
-5:"SELECT title, pages, rating FROM books WHERE pages BETWEEN 250 AND 400 AND rating>4.0;",
-6:"SELECT title, rating FROM movies ORDER BY rating DESC LIMIT 5;",
-7:"SELECT title, genre, year FROM books WHERE genre IN('Drame','Romance');",
-8:"SELECT title, genre, rating FROM movies WHERE genre IN('Mystère','Thriller') AND rating>=7.0;",
-9:"SELECT title, year FROM books WHERE year<2010;",
-10:"SELECT title, duration_minutes, genre FROM movies WHERE duration_minutes BETWEEN 100 AND 130;",
-11:"SELECT title, year FROM books ORDER BY year DESC LIMIT 3;",
-12:"SELECT title, rating, pages FROM books WHERE rating<4.0 OR pages<250;",
-13:"SELECT title, year, rating FROM movies WHERE year IN(2019,2020);",
-14:"SELECT * FROM books WHERE author_id IN(1,3,5) AND rating>=4.0;",
-15:"SELECT * FROM movies ORDER BY genre ASC, rating DESC;",
-16:"SELECT b.title,a.name,a.country FROM books b JOIN authors a ON a.id=b.author_id;",
-17:"SELECT m.title,d.name FROM movies m LEFT JOIN directors d ON d.id=m.director_id;",
-18:"SELECT a.name,COUNT(b.id) AS total FROM authors a LEFT JOIN books b ON b.author_id=a.id GROUP BY a.name;",
-19:"SELECT d.name,AVG(m.rating) AS moyenne FROM directors d JOIN movies m ON m.director_id=d.id GROUP BY d.name;",
-20:("WITH a AS (SELECT country,COUNT(*) AS total_auteurs FROM authors GROUP BY country),"
-"d AS (SELECT country,COUNT(*) AS total_realisateurs FROM directors GROUP BY country),"
-"all_c AS (SELECT country FROM a UNION SELECT country FROM d)"
-"SELECT all_c.country,COALESCE(a.total_auteurs,0) AS total_auteurs,COALESCE(d.total_realisateurs,0) AS total_realisateurs "
-"FROM all_c LEFT JOIN a ON a.country=all_c.country LEFT JOIN d ON d.country=all_c.country;")
+    1: "SELECT title, year FROM books;",
+    2: "SELECT title, year FROM movies WHERE genre='Sci-Fi';",
+    3: "SELECT title, author_id, rating FROM books WHERE rating>=4.5;",
+    4: "SELECT title, year FROM movies WHERE year BETWEEN 2015 AND 2021;",
+    5: "SELECT title, pages, rating FROM books WHERE pages BETWEEN 250 AND 400 AND rating>4.0;",
+    6: "SELECT title, rating FROM movies ORDER BY rating DESC LIMIT 5;",
+    7: "SELECT title, genre, year FROM books WHERE genre IN('Drame','Romance');",
+    8: "SELECT title, genre, rating FROM movies WHERE genre IN('Mystère','Thriller') AND rating>=7.0;",
+    9: "SELECT title, year FROM books WHERE year<2010;",
+    10: "SELECT title, duration_minutes, genre FROM movies WHERE duration_minutes BETWEEN 100 AND 130;",
+    11: "SELECT title, year FROM books ORDER BY year DESC LIMIT 3;",
+    12: "SELECT title, rating, pages FROM books WHERE rating<4.0 OR pages<250;",
+    13: "SELECT title, year, rating FROM movies WHERE year IN(2019,2020);",
+    14: "SELECT * FROM books WHERE author_id IN(1,3,5) AND rating>=4.0;",
+    15: "SELECT * FROM movies ORDER BY genre ASC, rating DESC;",
+    16: "SELECT b.title,a.name,a.country FROM books b JOIN authors a ON a.id=b.author_id;",
+    17: "SELECT m.title,d.name FROM movies m LEFT JOIN directors d ON d.id=m.director_id;",
+    18: "SELECT a.name,COUNT(b.id) AS total FROM authors a LEFT JOIN books b ON b.author_id=a.id GROUP BY a.name;",
+    19: "SELECT d.name,AVG(m.rating) AS moyenne FROM directors d JOIN movies m ON m.director_id=d.id GROUP BY d.name;",
+    20: ("WITH a AS (SELECT country,COUNT(*) AS total_auteurs FROM authors GROUP BY country), "
+         "d AS (SELECT country,COUNT(*) AS total_realisateurs FROM directors GROUP BY country), "
+         "all_c AS (SELECT country FROM a UNION SELECT country FROM d) "
+         "SELECT all_c.country,COALESCE(a.total_auteurs,0) AS total_auteurs,COALESCE(d.total_realisateurs,0) AS total_realisateurs "
+         "FROM all_c LEFT JOIN a ON a.country=all_c.country LEFT JOIN d ON d.country=all_c.country;")
 }
 
+# --- DB helpers ---
 @st.cache_resource
 def get_conn():
-    c=sqlite3.connect(":memory:",check_same_thread=False)
-    c.execute("PRAGMA foreign_keys=ON;")
-    return c
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys=ON;")
+    return conn
 
-def reset_db(c,s):
-    with closing(c.cursor()) as cur:cur.executescript(s)
+def reset_db(c, s):
+    with closing(c.cursor()) as cur:
+        cur.executescript(s)
     c.commit()
 
-def run_sql(c,q):
+def run_sql(c, q):
     with closing(c.cursor()) as cur:
         cur.execute(q)
-        if re.match(r"\s*(WITH|SELECT|PRAGMA)\b",q.strip(),re.I):
-            cols=[d[0] for d in cur.description] if cur.description else []
-            rows=cur.fetchall()
-            return pd.DataFrame(rows,columns=cols),None
-        c.commit();return None,"OK"
+        if re.match(r"\s*(WITH|SELECT|PRAGMA)\b", q.strip(), re.I):
+            cols = [d[0] for d in cur.description] if cur.description else []
+            rows = cur.fetchall()
+            return pd.DataFrame(rows, columns=cols), None
+        c.commit()
+        return None, "OK"
 
+# --- Visual progress ---
 def render_bar():
-    cols=st.columns(len(SOL))
-    for i,col in enumerate(cols):
-        c="#ccc"
-        s=st.session_state.status[i]
-        if s=="solved":c="#2ecc71"
-        elif s=="skipped":c="#e67e22"
+    cols = st.columns(len(SOL))
+    for i, col in enumerate(cols):
+        color = "#cccccc"
+        if st.session_state.status[i] == "solved":
+            color = "#2ecc71"
+        elif st.session_state.status[i] == "skipped":
+            color = "#e67e22"
         with col:
-            if st.button(str(i+1),key=f"bar_{i}_{st.session_state.render_id}",width="stretch"):
-                st.session_state.step=i
+            st.markdown(
+                f"<div style='background-color:{color};text-align:center;border-radius:3px;padding:4px;color:white;'>{i+1}</div>",
+                unsafe_allow_html=True,
+            )
 
-def save_progress_image(n):
-    w,h=400,40;sw=w//len(SOL)
-    img=Image.new("RGB",(w,h),"white");dr=ImageDraw.Draw(img)
-    for i,s in enumerate(st.session_state.status):
-        c="#ccc"
-        if s=="solved":c="#2ecc71"
-        elif s=="skipped":c="#e67e22"
-        dr.rectangle([i*sw,0,(i+1)*sw-2,h],fill=c,outline="black")
-    f=f"{n}_progress.png";img.save(f);return f
+def save_progress_image(name):
+    w, h = 400, 40
+    sw = w // len(SOL)
+    img = Image.new("RGB", (w, h), "white")
+    dr = ImageDraw.Draw(img)
+    for i, s in enumerate(st.session_state.status):
+        c = "#ccc"
+        if s == "solved":
+            c = "#2ecc71"
+        elif s == "skipped":
+            c = "#e67e22"
+        dr.rectangle([i * sw, 0, (i + 1) * sw - 2, h], fill=c, outline="black")
+    fname = f"{name}_progress.png"
+    img.save(fname)
+    return fname
 
-def upload_git(f,repo,tk,msg=None,branch="main"):
-    fn=f.split("/")[-1]
-    url=f"https://api.github.com/repos/{repo}/contents/submissions/{fn}"
-    with open(f,"rb") as x:content=base64.b64encode(x.read()).decode("utf-8")
-    h={"Authorization":f"token {tk}"}
-    r_get=requests.get(url,headers=h)
-    sha=r_get.json().get("sha") if r_get.status_code==200 else None
-    d={"message":msg or f"Add {fn}","content":content,"branch":branch}
-    if sha:d["sha"]=sha
-    r=requests.put(url,headers=h,data=json.dumps(d))
-    return r.status_code
+def upload_git(f, repo, token, msg, branch="main"):
+    fn = os.path.basename(f)
+    url = f"https://api.github.com/repos/{repo}/contents/{SUBDIR}/{fn}"
+    with open(f, "rb") as fh:
+        content = base64.b64encode(fh.read()).decode("utf-8")
+    headers = {"Authorization": f"token {token}"}
+    get_resp = requests.get(url, headers=headers)
+    sha = get_resp.json().get("sha") if get_resp.status_code == 200 else None
+    data = {"message": msg, "content": content, "branch": branch}
+    if sha:
+        data["sha"] = sha
+    put_resp = requests.put(url, headers=headers, data=json.dumps(data))
+    return put_resp.status_code
 
+# --- Initialize session ---
 if "status" not in st.session_state:
-    st.session_state.status=["locked"]*len(SOL)
-    st.session_state.inputs=[""]*len(SOL)
-    st.session_state.step=0
-    st.session_state.render_id=0
+    st.session_state.status = ["locked"] * len(SOL)
+    st.session_state.inputs = [""] * len(SOL)
+    st.session_state.step = 0
 
-conn=get_conn();reset_db(conn,DEFAULT_SQL)
+conn = get_conn()
+reset_db(conn, DEFAULT_SQL)
+
 st.title("Pratique SQL — Livres & Films")
 render_bar()
-i=st.session_state.step
-st.subheader(list(SOL.keys())[i])
-st.markdown(list(SOL.values())[i])
 
-user=st.text_area("Votre requête SQL :",st.session_state.inputs[i],height=150,key=f"input_{i}")
-c1,c2,c3=st.columns(3)
-with c1:run=st.button("Exécuter",key=f"run_{i}")
-with c2:skip=st.button("Je bloque — voir la solution",key=f"skip_{i}")
-with c3:reset=st.button("Réinitialiser la base",key=f"reset_{i}")
+i = st.session_state.step
+st.subheader(f"Exercice {i+1}")
+st.code(SOL[i+1], language="sql")
+
+user = st.text_area("Votre requête SQL :", st.session_state.inputs[i], height=150)
+
+col1, col2, col3 = st.columns(3)
+run = col1.button("Exécuter")
+skip = col2.button("Je bloque — voir la solution")
+reset = col3.button("Réinitialiser la base")
 
 if reset:
-    reset_db(conn,DEFAULT_SQL)
+    reset_db(conn, DEFAULT_SQL)
     st.success("Base réinitialisée.")
 
 if skip:
-    st.session_state.status[i]="skipped"
-    st.code(SOL.get(i+1,"-- Pas de solution"),language="sql")
-    st.session_state.inputs[i]=SOL.get(i+1,"")
-    st.session_state.render_id+=1
+    st.session_state.status[i] = "skipped"
+    st.session_state.inputs[i] = SOL[i+1]
+    st.session_state.step = min(i + 1, len(SOL) - 1)
     st.rerun()
 
 if run:
-    if not user.strip():
+    query = user.strip()
+    if not query:
         st.error("Veuillez saisir une requête SQL.")
     else:
-        st.session_state.inputs[i]=user
+        st.session_state.inputs[i] = query
         try:
-            df,msg=run_sql(conn,user)
+            df, msg = run_sql(conn, query)
             if df is not None and not df.empty:
-                st.dataframe(df,use_container_width=True)
-                st.session_state.status[i]="solved"
-                if i<len(SOL)-1:st.session_state.step=i+1
-                st.session_state.render_id+=1
+                st.dataframe(df, use_container_width=True)
+                st.session_state.status[i] = "solved"
+                if i < len(SOL) - 1:
+                    st.session_state.step = i + 1
                 st.rerun()
             elif msg:
                 st.success(msg)
             else:
-                st.error("Résultat vide ou incorrect.")
+                st.warning("Résultat vide.")
         except Exception as e:
             st.error(f"Erreur SQL : {e}")
 
 st.markdown("---")
 st.subheader("Soumission de votre progression")
-name=st.text_input("Nom complet :")
+
+name = st.text_input("Nom complet :")
 if st.button("Envoyer à l’enseignant"):
-    if name.strip():
-        img=save_progress_image(name.replace(" ","_"))
-        df=pd.DataFrame({"Exercice":list(SOL.keys()),"Réponse":st.session_state.inputs,"Statut":st.session_state.status})
-        f=f"{name.replace(' ','_')}_answers.csv";df.to_csv(f,index=False)
-        if TOKEN_SECRET_KEY not in st.secrets:
-            st.error("Le secret GITHUB_TOKEN est introuvable.")
-        else:
-            token=st.secrets[TOKEN_SECRET_KEY]
-            upload_git(img,REPO,token,f"Progress {name}")
-            upload_git(f,REPO,token,f"Answers {name}")
-            st.success("Fichiers envoyés dans GitHub /submissions.")
-    else:
+    if not name.strip():
         st.error("Nom manquant.")
+    else:
+        img_file = save_progress_image(name.replace(" ", "_"))
+        df = pd.DataFrame({
+            "Exercice": list(SOL.keys()),
+            "Réponse": st.session_state.inputs,
+            "Statut": st.session_state.status
+        })
+        csv_file = f"{name.replace(' ', '_')}_answers.csv"
+        df.to_csv(csv_file, index=False)
+
+        if TOKEN_SECRET_KEY not in st.secrets:
+            st.error("Secret GITHUB_TOKEN introuvable.")
+        else:
+            token = st.secrets[TOKEN_SECRET_KEY]
+            code1 = upload_git(img_file, REPO, token, f"Progress {name}")
+            code2 = upload_git(csv_file, REPO, token, f"Answers {name}")
+            if code1 in [200, 201] and code2 in [200, 201]:
+                st.success("Fichiers envoyés avec succès vers GitHub /submissions.")
+            else:
+                st.error(f"Erreur d’envoi : codes {code1}, {code2}")

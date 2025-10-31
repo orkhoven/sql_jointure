@@ -139,19 +139,37 @@ EXERCICES = [
 ]
 
 PRESETS = {
+    1: "SELECT title, year FROM books ORDER BY year ASC;",
+    2: "SELECT title, year FROM movies WHERE genre='Sci-Fi';",
+    3: "SELECT title, author_id, rating FROM books WHERE rating >= 4.5 ORDER BY rating DESC;",
+    4: "SELECT title, year, director_id FROM movies WHERE year BETWEEN 2015 AND 2021;",
+    5: "SELECT title, pages, rating FROM books WHERE pages BETWEEN 250 AND 400 AND rating > 4.0;",
+    6: "SELECT title, rating FROM movies ORDER BY rating DESC LIMIT 5;",
+    7: "SELECT title, genre, year FROM books WHERE genre IN ('Drame', 'Romance');",
+    8: "SELECT title, genre, rating FROM movies WHERE genre IN ('Mystère', 'Thriller') AND rating >= 7.0;",
+    9: "SELECT title, year FROM books WHERE year < 2010 ORDER BY year DESC;",
+    10: "SELECT title, duration_minutes, genre FROM movies WHERE duration_minutes BETWEEN 100 AND 130;",
+    11: "SELECT title, year FROM books ORDER BY year DESC LIMIT 3;",
+    12: "SELECT title, rating, pages FROM books WHERE rating < 4.0 OR pages < 250;",
+    13: "SELECT title, year, rating FROM movies WHERE year IN (2019, 2020);",
+    14: "SELECT * FROM books WHERE author_id IN (1,3,5) AND rating >= 4.0;",
+    15: "SELECT * FROM movies ORDER BY genre ASC, rating DESC;",
     16: "SELECT b.title, a.name AS auteur, a.country FROM books b JOIN authors a ON a.id = b.author_id;",
     17: "SELECT m.title, d.name AS realisateur FROM movies m LEFT JOIN directors d ON d.id = m.director_id;",
     18: "SELECT a.name, COUNT(b.id) AS total_livres FROM authors a LEFT JOIN books b ON b.author_id = a.id GROUP BY a.name;",
     19: "SELECT d.name, AVG(m.rating) AS moyenne_note FROM directors d JOIN movies m ON m.director_id = d.id GROUP BY d.name;",
-    20: ("-- Simulation de FULL JOIN (SQLite)\n"
-         "WITH a AS (SELECT country, COUNT(*) AS total_auteurs FROM authors GROUP BY country),\n"
-         "d AS (SELECT country, COUNT(*) AS total_realisateurs FROM directors GROUP BY country),\n"
-         "all_c AS (SELECT country FROM a UNION SELECT country FROM d)\n"
-         "SELECT all_c.country, COALESCE(a.total_auteurs,0) AS total_auteurs,\n"
-         "COALESCE(d.total_realisateurs,0) AS total_realisateurs\n"
-         "FROM all_c LEFT JOIN a ON a.country=all_c.country\n"
-         "LEFT JOIN d ON d.country=all_c.country ORDER BY all_c.country;")
+    20: (
+        "-- Simulation de FULL JOIN (SQLite)\n"
+        "WITH a AS (SELECT country, COUNT(*) AS total_auteurs FROM authors GROUP BY country),\n"
+        "d AS (SELECT country, COUNT(*) AS total_realisateurs FROM directors GROUP BY country),\n"
+        "all_c AS (SELECT country FROM a UNION SELECT country FROM d)\n"
+        "SELECT all_c.country, COALESCE(a.total_auteurs,0) AS total_auteurs,\n"
+        "COALESCE(d.total_realisateurs,0) AS total_realisateurs\n"
+        "FROM all_c LEFT JOIN a ON a.country=all_c.country\n"
+        "LEFT JOIN d ON d.country=all_c.country ORDER BY all_c.country;"
+    )
 }
+
 
 # === OUTILS BD ===
 @st.cache_resource

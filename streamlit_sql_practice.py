@@ -9,7 +9,25 @@ from contextlib import closing
 st.set_page_config(page_title="Pratique SQL : Livres & Films", layout="wide")
 
 # === BASE DE DONNÉES PAR DÉFAUT ===
-DEFAULT_SQL = r""" ... (same as your current schema and inserts) ... """
+DEFAULT_SQL = r"""
+PRAGMA foreign_keys = OFF;
+DROP TABLE IF EXISTS books;
+DROP TABLE IF EXISTS movies;
+DROP TABLE IF EXISTS authors;
+DROP TABLE IF EXISTS directors;
+PRAGMA foreign_keys = ON;
+
+-- Auteurs
+CREATE TABLE authors (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  country TEXT,
+  birth_year INTEGER
+);
+...
+-- Données : films
+INSERT INTO movies (...) VALUES (...);
+"""
 
 # === EXERCICES ===
 EXERCICES = [

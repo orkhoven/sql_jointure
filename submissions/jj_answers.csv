@@ -1,0 +1,21 @@
+Exercice,Réponse,Statut
+1,"SELECT title, year FROM books;",solved
+2,"SELECT title, year FROM movies WHERE genre='Sci-Fi';",solved
+3,"SELECT title, author_id, rating FROM books WHERE rating>=4.5;",skipped
+4,"SELECT title, year FROM movies WHERE year BETWEEN 2015 AND 2021;",skipped
+5,"SELECT title, pages, rating FROM books WHERE pages BETWEEN 250 AND 400 AND rating>4.0;",skipped
+6,"SELECT title, rating FROM movies ORDER BY rating DESC LIMIT 5;",solved
+7,"SELECT title, genre, year FROM books WHERE genre IN('Drame','Romance');",skipped
+8,-- Pas de solution enregistrée.,skipped
+9,,locked
+10,,locked
+11,,locked
+12,,locked
+13,,locked
+14,,locked
+15,,locked
+16,,locked
+17,,locked
+18,,locked
+19,,locked
+20,,locked

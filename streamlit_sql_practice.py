@@ -277,7 +277,7 @@ if reset:
 if skip:
     st.session_state.status[exo_index] = "skipped"
     st.warning("Solution proposée :")
-    solution = PRESETS.get(exo_index + 1, "-- Pas de solution prédéfinie pour cet exercice.")
+    solution = PRESETS.get(exo_index + 1)
     st.code(solution, language="sql")
     st.session_state.inputs[exo_index] = solution
     render_progress_bar()

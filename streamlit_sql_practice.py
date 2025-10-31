@@ -1,4 +1,4 @@
-# streamlit_sql_practice_final.py
+# streamlit_sql_practice_final_nav.py
 import streamlit as st
 import sqlite3
 import pandas as pd
@@ -123,15 +123,6 @@ def run_sql(c, q):
         c.commit()
         return None,"OK"
 
-def render_bar():
-    cols = st.columns(len(QUESTIONS))
-    for i, col in enumerate(cols):
-        color = "#ccc"
-        if st.session_state.status[i] == "solved": color = "#2ecc71"
-        elif st.session_state.status[i] == "skipped": color = "#e67e22"
-        with col:
-            st.markdown(f"<div style='background:{color};text-align:center;padding:3px;color:white;font-weight:bold'>{i+1}</div>",unsafe_allow_html=True)
-
 def upload_git(f,repo,token,msg):
     fn=os.path.basename(f)
     url=f"https://api.github.com/repos/{repo}/contents/{SUBDIR}/{fn}"
@@ -152,19 +143,32 @@ if "status" not in st.session_state:
 
 conn=get_conn();reset_db(conn,DEFAULT_SQL)
 
+# ---------- UI ----------
 st.title("Pratique SQL — Livres & Films")
-render_bar()
 
-i=st.session_state.step
+cols = st.columns(len(QUESTIONS))
+for i, col in enumerate(cols):
+    color = "#ccc"
+    if st.session_state.status[i] == "solved": color = "#2ecc71"
+    elif st.session_state.status[i] == "skipped": color = "#e67e22"
+    with col:
+        if st.button(str(i+1), key=f"q{i}", use_container_width=True):
+            st.session_state.step = i
+        st.markdown(
+            f"<div style='background:{color};height:5px;border-radius:2px'></div>",
+            unsafe_allow_html=True
+        )
+
+i = st.session_state.step
 st.subheader(f"Exercice {i+1}")
 st.write(QUESTIONS[i])
 
 user=st.text_area("Votre requête SQL :", st.session_state.inputs[i], height=150)
 
-col1,col2,col3=st.columns(3)
-run=col1.button("Exécuter")
-see_sol=col2.button("Voir la solution")
-reset=col3.button("Réinitialiser la base")
+c1,c2,c3=st.columns(3)
+run=c1.button("Exécuter")
+see_sol=c2.button("Voir la solution")
+reset=c3.button("Réinitialiser la base")
 
 if reset:
     reset_db(conn,DEFAULT_SQL)
@@ -172,10 +176,8 @@ if reset:
 
 if see_sol:
     sol_text = SOL[i]
-    st.session_state.inputs[i] = sol_text
     st.session_state.status[i] = "skipped"
-    st.text_area("Solution officielle :", sol_text, height=100)
-    st.info("La solution a été copiée dans la zone d’édition.")
+    st.code(sol_text, language="sql")
 
 if run:
     q=user.strip()
@@ -191,11 +193,10 @@ if run:
                 else:
                     st.dataframe(df,use_container_width=True)
                     st.session_state.status[i]="solved"
+            elif msg and msg!="OK":
+                st.success(msg)
             else:
-                if msg=="OK":
-                    st.warning("Aucune donnée retournée (requête non-SELECT).")
-                else:
-                    st.success(msg)
+                st.warning("Aucune donnée retournée.")
         except Exception as e:
             st.error(f"Erreur SQL : {e}")
 
